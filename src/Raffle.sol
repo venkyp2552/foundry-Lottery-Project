@@ -20,7 +20,7 @@
 // view & pure functions
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.19;
 
 import {VRFConsumerBaseV2Plus} from "lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
@@ -35,11 +35,11 @@ contract Raffle is VRFConsumerBaseV2Plus {
     error Raffle__SendMoreToEnterRaffle();
     error Raffle__TransferFailed();
     error Raffle__RaffleNotOpen();
-
+    error Raffle__upKeepNotNeeded(uint256 balance, uint256 playerslength, uint256 raffleState);
     /** Type Declarations */
     enum RaffleState{
-        OPEN,
-        CALCULATING
+        OPEN, //0
+        CALCULATING //1
     }
     /**State Variables */
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
@@ -60,6 +60,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     /** Events */
     event RaffleEnter(address indexed player);
     event WinnerPicked(address indexed winner);
+    
     constructor(
         uint256 entrancefee,
         uint256 interval,
@@ -94,11 +95,38 @@ contract Raffle is VRFConsumerBaseV2Plus {
     //2.Use Random Number to pick a player
     //3.Be automated call.
 
-    function pinkWinner() external {
+
+    //When should the winner be PickedUp?
+    /**
+     * @dev This is the function that the chainlink nodes will call to see
+     * if the lottery is ready to have a winner pickedup
+     * The Following should be true in order for upkeepNeeded to be true
+     * 1.The time interval has pass between raffle runs
+     * 2.The lottery is open 
+     * 3.The Contract has ETH (has Players)
+     * 4.Implicity, your subscription has LINK
+     */
+
+    function checkUpkeep(bytes memory /* checkData */) public view returns(bool upkeepNeeded, bytes memory /* performData */){
+        bool timePassed=(block.timestamp - s_lastTimeStamp) >= i_interval;
+        bool isOpen = s_raffleState==RaffleState.OPEN;
+        bool hasBalance=address(this).balance > 0;
+        bool hasPlayers=s_palyers.length > 0;
+        upkeepNeeded = timePassed && isOpen && hasBalance && hasPlayers;
+        return(upkeepNeeded,"");
+    }
+
+    //Here we are going to modify the function name from pinkWinner this to performUpkeep() 
+    // from https://docs.chain.link/chainlink-automation/guides/compatible-contracts 
+    function performUpkeep(bytes memory /* performData */) external {
         //Checks
-        if ((block.timestamp - s_lastTimeStamp) < i_interval) {
-            revert();
+        (bool upkeepNeeded,)=checkUpkeep("");
+        if(!upkeepNeeded){
+            revert Raffle__upKeepNotNeeded(address(this).balance,s_palyers.length,uint256(s_raffleState));
         }
+        // if ((block.timestamp - s_lastTimeStamp) < i_interval) {
+        //     revert();
+        // }
 
         //Interactions (External Contracts Interactions)
         s_raffleState=RaffleState.CALCULATING;
@@ -113,7 +141,8 @@ contract Raffle is VRFConsumerBaseV2Plus {
                 VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
             )
         });
-        uint256 requestId = s_vrfCoordinator.requestRandomWords(request);
+        // uint256 requestId = 
+        s_vrfCoordinator.requestRandomWords(request);
     }
 
     /**
@@ -125,7 +154,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
     //CEI => Checks, Effects, Interactions
 
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+    function fulfillRandomWords(uint256 /*requestId*/, uint256[] calldata randomWords) internal override {
         // Checks
 
         //we need only one random number bcz NUM_WORDS we declare as 1 only.
