@@ -145,13 +145,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
         s_vrfCoordinator.requestRandomWords(request);
     }
 
-    /**
-     * Getter Functions
-     */
-    function getEntranceFee() external view returns (uint256) {
-        return i_entranceFee;
-    }
-
+    
     //CEI => Checks, Effects, Interactions
 
     function fulfillRandomWords(uint256 /*requestId*/, uint256[] calldata randomWords) internal override {
@@ -173,5 +167,24 @@ contract Raffle is VRFConsumerBaseV2Plus {
         if(!success){
             revert Raffle__TransferFailed();
         }
+    }
+
+    /**
+     * Getter Functions
+     */
+    function getEntranceFee() external view returns (uint256) {
+        return i_entranceFee;
+    }
+
+    function getRaffleState() external view returns(RaffleState){
+        return s_raffleState;
+    }
+
+    function getRequestConfirmations() external pure returns(uint16){
+        return REQUEST_CONFIRMATIONS;
+    }
+
+    function getPlayer(uint256 indexPlayer) external view returns(address){
+        return s_palyers[indexPlayer];
     }
 }
